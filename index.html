@@ -511,8 +511,8 @@
 
         <div class="field">
           <label for="endpointInput">Google Apps Script web-app URL</label>
-          <input id="endpointInput" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec">
-          <small>Leave blank to use CSV export only. Paste the deployed URL from the included Apps Script setup.</small>
+          <input id="endpointInput" inputmode="url" readonly>
+          <small>This spreadsheet connection is built into the website.</small>
         </div>
 
         <div class="field">
@@ -537,6 +537,8 @@
       lastSubmitted: "labScanner.lastSubmitted.v1"
     };
 
+    const FIXED_ENDPOINT = "https://script.google.com/macros/s/AKfycbxNd7_QUG9uTsWBx193R2qE2WBohjR0Az7busoJ27Py_7GGxUts2BCf5noKLi4tmfLI/exec";
+
     const state = {
       scanner: null,
       scanning: false,
@@ -545,7 +547,7 @@
       settings: {
         warehouseId: "",
         worker: "",
-        endpoint: "https://script.google.com/macros/s/AKfycbxNd7_QUG9uTsWBx193R2qE2WBohjR0Az7busoJ27Py_7GGxUts2BCf5noKLi4tmfLI/exec",
+        endpoint: FIXED_ENDPOINT,
         accessKey: ""
       }
     };
@@ -584,6 +586,9 @@
     function loadState() {
       const savedSettings = safeJsonParse(localStorage.getItem(STORAGE_KEYS.settings), null);
       if (savedSettings) state.settings = { ...state.settings, ...savedSettings };
+      // Always use the centrally configured endpoint. Old URLs saved on a phone cannot override it.
+      state.settings.endpoint = FIXED_ENDPOINT;
+      saveSettings();
 
       const savedOrder = safeJsonParse(localStorage.getItem(STORAGE_KEYS.order), []);
       if (Array.isArray(savedOrder)) {
@@ -986,7 +991,7 @@
       state.settings = {
         warehouseId: elements.warehouseInput.value.trim(),
         worker: elements.workerInput.value.trim(),
-        endpoint: elements.endpointInput.value.trim(),
+        endpoint: FIXED_ENDPOINT,
         accessKey: elements.accessKeyInput.value
       };
       saveSettings();
