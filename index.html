@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10233f">
+  <title>Lab Parts Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --navy: #10233f;
+      --blue: #1769e0;
+      --blue-dark: #0f53b8;
+      --green: #147a49;
+      --red: #b42318;
+      --amber: #9a6700;
+      --ink: #172033;
+      --muted: #657087;
+      --line: #d9dfeb;
+      --surface: #ffffff;
+      --background: #f3f6fa;
+      --shadow: 0 10px 30px rgba(16, 35, 63, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--background); }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: var(--background);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+    button { touch-action: manipulation; }
+
+    .app {
+      width: min(760px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding-bottom: calc(112px + env(safe-area-inset-bottom));
+      background: var(--background);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 68px;
+      padding: 12px 16px;
+      color: white;
+      background: var(--navy);
+      box-shadow: 0 3px 14px rgba(0,0,0,.16);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      color: #cbd8ea;
+      font-size: 13px;
+    }
+
+    .icon-button {
+      min-width: 44px;
+      min-height: 44px;
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 12px;
+      color: white;
+      background: rgba(255,255,255,.08);
+      cursor: pointer;
+    }
+
+    main { padding: 14px; }
+
+    .card {
+      margin-bottom: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .card-header h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: #4a5568;
+      background: #eef1f5;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .status::before {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #7c879a;
+      content: "";
+    }
+
+    .status.live { color: #0f623b; background: #e8f7ef; }
+    .status.live::before { background: #19a15f; box-shadow: 0 0 0 4px rgba(25,161,95,.14); }
+    .status.error { color: #8d1c13; background: #feeceb; }
+    .status.error::before { background: var(--red); }
+
+    .scanner-shell {
+      position: relative;
+      min-height: 310px;
+      background: #07111f;
+    }
+
+    #reader {
+      width: 100%;
+      min-height: 310px;
+      color: white;
+      background: #07111f;
+    }
+
+    #reader video {
+      width: 100% !important;
+      min-height: 310px;
+      object-fit: cover;
+    }
+
+    #reader__dashboard_section_swaplink,
+    #reader__dashboard_section_csr button,
+    #reader__dashboard_section_fsr input,
+    #reader__scan_region img { display: none !important; }
+
+    .scanner-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      color: #d6dfec;
+      text-align: center;
+      background: radial-gradient(circle at 50% 30%, #233b5e, #07111f 68%);
+    }
+
+    .scanner-placeholder.hidden { display: none; }
+
+    .scanner-placeholder strong {
+      display: block;
+      margin-bottom: 8px;
+      color: white;
+      font-size: 20px;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 12%;
+      right: 12%;
+      top: 50%;
+      height: 2px;
+      opacity: 0;
+      pointer-events: none;
+      background: #54dd91;
+      box-shadow: 0 0 12px #54dd91;
+    }
+
+    .scanner-shell.active .scan-line {
+      opacity: 1;
+      animation: sweep 2s ease-in-out infinite;
+    }
+
+    @keyframes sweep {
+      0%, 100% { transform: translateY(-72px); }
+      50% { transform: translateY(72px); }
+    }
+
+    .scan-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .button {
+      min-height: 48px;
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .button:disabled { opacity: .45; cursor: not-allowed; }
+    .button.primary { color: white; background: var(--blue); }
+    .button.primary:active { background: var(--blue-dark); }
+    .button.secondary { color: var(--ink); background: #e9eef6; }
+    .button.danger { color: var(--red); background: #feeceb; }
+
+    .manual-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 0 12px 12px;
+    }
+
+    input {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 12px;
+      border: 1px solid #bfc8d8;
+      border-radius: 12px;
+      color: var(--ink);
+      background: white;
+    }
+
+    input:focus {
+      border-color: var(--blue);
+      outline: 3px solid rgba(23,105,224,.14);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f8faff;
+    }
+
+    .metric span { display: block; color: var(--muted); font-size: 12px; }
+    .metric strong { display: block; margin-top: 2px; font-size: 24px; }
+
+    .empty {
+      padding: 30px 18px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .parts-list { list-style: none; margin: 0; padding: 0; }
+
+    .part-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .part-row:last-child { border-bottom: 0; }
+
+    .part-code {
+      overflow-wrap: anywhere;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+
+    .part-time {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .quantity-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .quantity-controls button {
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 11px;
+      color: var(--ink);
+      background: #e9eef6;
+      font-size: 22px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .quantity-controls output {
+      min-width: 34px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    .bottom-bar {
+      position: fixed;
+      z-index: 25;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--line);
+      background: rgba(255,255,255,.97);
+      box-shadow: 0 -8px 24px rgba(16,35,63,.12);
+      backdrop-filter: blur(12px);
+    }
+
+    .bottom-inner {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 10px;
+      width: min(732px, 100%);
+      margin: 0 auto;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 80;
+      top: 82px;
+      left: 50%;
+      width: min(92%, 520px);
+      padding: 13px 16px;
+      border-radius: 14px;
+      color: white;
+      background: #192638;
+      box-shadow: 0 12px 40px rgba(0,0,0,.24);
+      transform: translate(-50%, -18px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .2s ease;
+      text-align: center;
+      font-weight: 750;
+    }
+
+    .toast.show { transform: translate(-50%, 0); opacity: 1; }
+    .toast.success { background: var(--green); }
+    .toast.error { background: var(--red); }
+
+    dialog {
+      width: min(92vw, 520px);
+      padding: 0;
+      border: 0;
+      border-radius: 20px;
+      color: var(--ink);
+      background: white;
+      box-shadow: 0 28px 90px rgba(0,0,0,.35);
+    }
+
+    dialog::backdrop { background: rgba(7,17,31,.66); }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .dialog-header h2 { margin: 0; font-size: 18px; }
+    .close-button { border: 0; background: transparent; font-size: 26px; cursor: pointer; }
+
+    .dialog-body { padding: 16px 18px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 800; }
+    .field small { display: block; margin-top: 5px; color: var(--muted); line-height: 1.35; }
+
+    .dialog-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 14px 18px 18px;
+    }
+
+    .notice {
+      margin-bottom: 14px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      color: #644700;
+      background: #fff4ce;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (min-width: 680px) {
+      main { padding: 20px; }
+      .scanner-shell, #reader, #reader video { min-height: 390px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <h1>Lab Parts Scanner</h1>
+        <p id="warehouseLabel">Warehouse not configured</p>
+      </div>
+      <button class="icon-button" id="settingsButton" type="button" aria-label="Open settings">⚙</button>
+    </header>
+
+    <main>
+      <section class="card" aria-labelledby="scannerTitle">
+        <div class="card-header">
+          <h2 id="scannerTitle">Continuous scanner</h2>
+          <span class="status" id="scannerStatus">Stopped</span>
+        </div>
+
+        <div class="scanner-shell" id="scannerShell">
+          <div id="reader" aria-label="Barcode camera preview"></div>
+          <div class="scanner-placeholder" id="scannerPlaceholder">
+            <div>
+              <strong>Scan without reopening pages</strong>
+              Start the camera once, then move from label to label.
+            </div>
+          </div>
+          <div class="scan-line" aria-hidden="true"></div>
+        </div>
+
+        <div class="scan-controls">
+          <button class="button primary" id="startButton" type="button">Start scanning</button>
+          <button class="button secondary" id="stopButton" type="button" disabled>Stop camera</button>
+        </div>
+
+        <form class="manual-row" id="manualForm">
+          <label class="sr-only" for="manualCode">Enter part code manually</label>
+          <input id="manualCode" autocomplete="off" autocapitalize="characters" placeholder="Enter part code manually">
+          <button class="button secondary" type="submit">Add</button>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="orderTitle">
+        <div class="card-header">
+          <h2 id="orderTitle">Current order</h2>
+          <button class="button danger" id="clearButton" type="button" disabled>Clear</button>
+        </div>
+
+        <div class="summary">
+          <div class="metric">
+            <span>Part numbers</span>
+            <strong id="uniqueCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Total pieces</span>
+            <strong id="pieceCount">0</strong>
+          </div>
+        </div>
+
+        <div class="empty" id="emptyState">Scanned parts will appear here.</div>
+        <ul class="parts-list" id="partsList" aria-live="polite"></ul>
+      </section>
+    </main>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="bottom-inner">
+      <button class="button secondary" id="exportButton" type="button" disabled>Export CSV</button>
+      <button class="button primary" id="submitButton" type="button" disabled>Send to spreadsheet</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" id="settingsForm">
+      <div class="dialog-header">
+        <h2>Scanner settings</h2>
+        <button class="close-button" value="cancel" aria-label="Close settings">×</button>
+      </div>
+      <div class="dialog-body">
+        <div class="notice">Settings are saved on this phone. Workers do not need to re-enter them each time.</div>
+
+        <div class="field">
+          <label for="warehouseInput">Warehouse ID *</label>
+          <input id="warehouseInput" required placeholder="Example: WH-07">
+        </div>
+
+        <div class="field">
+          <label for="workerInput">Worker name or initials</label>
+          <input id="workerInput" placeholder="Optional">
+        </div>
+
+        <div class="field">
+          <label for="endpointInput">Google Apps Script web-app URL</label>
+          <input id="endpointInput" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec">
+          <small>Leave blank to use CSV export only. Paste the deployed URL from the included Apps Script setup.</small>
+        </div>
+
+        <div class="field">
+          <label for="accessKeyInput">Shared access key</label>
+          <input id="accessKeyInput" type="password" autocomplete="off" placeholder="Optional">
+          <small>Only needed if the same key is configured in Code.gs.</small>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="button secondary" value="cancel" type="button" id="cancelSettingsButton">Cancel</button>
+        <button class="button primary" value="default" type="submit">Save settings</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    const STORAGE_KEYS = {
+      settings: "labScanner.settings.v1",
+      order: "labScanner.currentOrder.v1",
+      lastSubmitted: "labScanner.lastSubmitted.v1"
+    };
+
+    const state = {
+      scanner: null,
+      scanning: false,
+      items: new Map(),
+      scanGate: { code: "", lastSeenAt: 0 },
+      settings: {
+        warehouseId: "",
+        worker: "",
+        endpoint: "",
+        accessKey: ""
+      }
+    };
+
+    const elements = {
+      warehouseLabel: document.getElementById("warehouseLabel"),
+      settingsButton: document.getElementById("settingsButton"),
+      scannerStatus: document.getElementById("scannerStatus"),
+      scannerShell: document.getElementById("scannerShell"),
+      scannerPlaceholder: document.getElementById("scannerPlaceholder"),
+      startButton: document.getElementById("startButton"),
+      stopButton: document.getElementById("stopButton"),
+      manualForm: document.getElementById("manualForm"),
+      manualCode: document.getElementById("manualCode"),
+      uniqueCount: document.getElementById("uniqueCount"),
+      pieceCount: document.getElementById("pieceCount"),
+      emptyState: document.getElementById("emptyState"),
+      partsList: document.getElementById("partsList"),
+      clearButton: document.getElementById("clearButton"),
+      exportButton: document.getElementById("exportButton"),
+      submitButton: document.getElementById("submitButton"),
+      toast: document.getElementById("toast"),
+      settingsDialog: document.getElementById("settingsDialog"),
+      settingsForm: document.getElementById("settingsForm"),
+      warehouseInput: document.getElementById("warehouseInput"),
+      workerInput: document.getElementById("workerInput"),
+      endpointInput: document.getElementById("endpointInput"),
+      accessKeyInput: document.getElementById("accessKeyInput"),
+      cancelSettingsButton: document.getElementById("cancelSettingsButton")
+    };
+
+    function safeJsonParse(value, fallback) {
+      try { return JSON.parse(value); } catch { return fallback; }
+    }
+
+    function loadState() {
+      const savedSettings = safeJsonParse(localStorage.getItem(STORAGE_KEYS.settings), null);
+      if (savedSettings) state.settings = { ...state.settings, ...savedSettings };
+
+      const savedOrder = safeJsonParse(localStorage.getItem(STORAGE_KEYS.order), []);
+      if (Array.isArray(savedOrder)) {
+        for (const item of savedOrder) {
+          if (!item || typeof item.code !== "string") continue;
+          state.items.set(item.code, {
+            code: item.code,
+            quantity: Math.max(1, Number(item.quantity) || 1),
+            firstScannedAt: item.firstScannedAt || new Date().toISOString(),
+            lastScannedAt: item.lastScannedAt || new Date().toISOString()
+          });
+        }
+      }
+
+      const params = new URLSearchParams(location.search);
+      const warehouseFromUrl = params.get("warehouse");
+      if (warehouseFromUrl) {
+        state.settings.warehouseId = warehouseFromUrl.trim();
+        saveSettings();
+      }
+    }
+
+    function saveSettings() {
+      localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
+    }
+
+    function saveOrder() {
+      localStorage.setItem(STORAGE_KEYS.order, JSON.stringify([...state.items.values()]));
+    }
+
+    function formatTime(iso) {
+      return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(iso));
+    }
+
+    function render() {
+      const items = [...state.items.values()];
+      const totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
+      const hasItems = items.length > 0;
+
+      elements.warehouseLabel.textContent = state.settings.warehouseId
+        ? `${state.settings.warehouseId}${state.settings.worker ? " · " + state.settings.worker : ""}`
+        : "Warehouse not configured";
+
+      elements.uniqueCount.textContent = String(items.length);
+      elements.pieceCount.textContent = String(totalPieces);
+      elements.emptyState.hidden = hasItems;
+      elements.clearButton.disabled = !hasItems;
+      elements.exportButton.disabled = !hasItems;
+      elements.submitButton.disabled = !hasItems;
+      elements.submitButton.textContent = state.settings.endpoint ? "Send to spreadsheet" : "Set spreadsheet URL";
+
+      elements.partsList.replaceChildren();
+
+      items.slice().reverse().forEach((item) => {
+        const row = document.createElement("li");
+        row.className = "part-row";
+
+        const info = document.createElement("div");
+        const code = document.createElement("div");
+        code.className = "part-code";
+        code.textContent = item.code;
+        const time = document.createElement("div");
+        time.className = "part-time";
+        time.textContent = `Last scanned ${formatTime(item.lastScannedAt)}`;
+        info.append(code, time);
+
+        const controls = document.createElement("div");
+        controls.className = "quantity-controls";
+
+        const minus = document.createElement("button");
+        minus.type = "button";
+        minus.setAttribute("aria-label", `Decrease ${item.code}`);
+        minus.textContent = "−";
+        minus.addEventListener("click", () => changeQuantity(item.code, -1));
+
+        const quantity = document.createElement("output");
+        quantity.textContent = String(item.quantity);
+        quantity.setAttribute("aria-label", `${item.quantity} pieces`);
+
+        const plus = document.createElement("button");
+        plus.type = "button";
+        plus.setAttribute("aria-label", `Increase ${item.code}`);
+        plus.textContent = "+";
+        plus.addEventListener("click", () => changeQuantity(item.code, 1));
+
+        controls.append(minus, quantity, plus);
+        row.append(info, controls);
+        elements.partsList.append(row);
+      });
+    }
+
+    function normalizeCode(rawValue) {
+      const raw = String(rawValue || "").trim();
+      if (!raw) return "";
+
+      try {
+        const parsed = JSON.parse(raw);
+        const value = parsed.partCode || parsed.part || parsed.sku || parsed.code;
+        if (value) return String(value).trim();
+      } catch { /* Normal barcode text is not JSON. */ }
+
+      try {
+        const url = new URL(raw);
+        const value = url.searchParams.get("part") || url.searchParams.get("partCode") || url.searchParams.get("sku") || url.searchParams.get("code");
+        if (value) return value.trim();
+      } catch { /* Normal barcode text is not a URL. */ }
+
+      return raw;
+    }
+
+    function addPart(rawCode, source = "scan") {
+      const code = normalizeCode(rawCode);
+      if (!code) return;
+
+      const now = new Date().toISOString();
+      const existing = state.items.get(code);
+
+      if (existing) {
+        existing.quantity += 1;
+        existing.lastScannedAt = now;
+      } else {
+        state.items.set(code, {
+          code,
+          quantity: 1,
+          firstScannedAt: now,
+          lastScannedAt: now
+        });
+      }
+
+      saveOrder();
+      render();
+      feedback();
+      showToast(`${code} ${existing ? "quantity increased" : "added"}`, "success", source === "scan" ? 850 : 1300);
+    }
+
+    function changeQuantity(code, delta) {
+      const item = state.items.get(code);
+      if (!item) return;
+      item.quantity += delta;
+      item.lastScannedAt = new Date().toISOString();
+      if (item.quantity <= 0) state.items.delete(code);
+      saveOrder();
+      render();
+    }
+
+    function feedback() {
+      if (navigator.vibrate) navigator.vibrate(45);
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.frequency.value = 960;
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.09);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.09);
+      } catch { /* Sound is optional. */ }
+    }
+
+    function onScanSuccess(decodedText) {
+      const code = normalizeCode(decodedText);
+      if (!code) return;
+
+      const now = Date.now();
+      if (state.scanGate.code === code && now - state.scanGate.lastSeenAt < 1400) {
+        state.scanGate.lastSeenAt = now;
+        return;
+      }
+
+      state.scanGate = { code, lastSeenAt: now };
+      addPart(code, "scan");
+    }
+
+    function setScannerStatus(text, kind = "") {
+      elements.scannerStatus.textContent = text;
+      elements.scannerStatus.className = `status ${kind}`.trim();
+    }
+
+    async function startScanner() {
+      if (state.scanning) return;
+      if (typeof Html5Qrcode === "undefined") {
+        setScannerStatus("Scanner library unavailable", "error");
+        showToast("The scanner library did not load. Check the internet connection.", "error", 3500);
+        return;
+      }
+
+      elements.startButton.disabled = true;
+      setScannerStatus("Starting…");
+
+      const formats = typeof Html5QrcodeSupportedFormats !== "undefined" ? [
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.DATA_MATRIX
+      ] : undefined;
+
+      state.scanner = new Html5Qrcode("reader", formats ? { formatsToSupport: formats, verbose: false } : { verbose: false });
+
+      const config = {
+        fps: 12,
+        qrbox: (viewWidth, viewHeight) => ({
+          width: Math.floor(Math.min(viewWidth * 0.86, 520)),
+          height: Math.floor(Math.min(viewHeight * 0.42, 190))
+        }),
+        aspectRatio: 1.777778,
+        disableFlip: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: false }
+      };
+
+      try {
+        await state.scanner.start(
+          { facingMode: "environment" },
+          config,
+          onScanSuccess,
+          () => {}
+        );
+
+        state.scanning = true;
+        elements.scannerPlaceholder.classList.add("hidden");
+        elements.scannerShell.classList.add("active");
+        elements.stopButton.disabled = false;
+        elements.startButton.textContent = "Camera running";
+        setScannerStatus("Scanning", "live");
+      } catch (error) {
+        console.error(error);
+        state.scanner = null;
+        elements.startButton.disabled = false;
+        elements.startButton.textContent = "Start scanning";
+        setScannerStatus("Camera blocked", "error");
+        showToast("Camera access failed. Open this site over HTTPS and allow camera permission.", "error", 4500);
+      }
+    }
+
+    async function stopScanner() {
+      if (!state.scanner || !state.scanning) return;
+      elements.stopButton.disabled = true;
+
+      try {
+        await state.scanner.stop();
+        await state.scanner.clear();
+      } catch (error) {
+        console.warn(error);
+      }
+
+      state.scanner = null;
+      state.scanning = false;
+      elements.scannerPlaceholder.classList.remove("hidden");
+      elements.scannerShell.classList.remove("active");
+      elements.startButton.disabled = false;
+      elements.startButton.textContent = "Start scanning";
+      setScannerStatus("Stopped");
+    }
+
+    function createOrderPayload() {
+      const now = new Date();
+      const stamp = now.toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+      const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const warehouse = state.settings.warehouseId || "UNSET";
+
+      return {
+        version: 1,
+        orderId: `${warehouse}-${stamp}-${random}`,
+        submittedAt: now.toISOString(),
+        warehouseId: state.settings.warehouseId,
+        worker: state.settings.worker,
+        accessKey: state.settings.accessKey,
+        userAgent: navigator.userAgent,
+        items: [...state.items.values()].map(item => ({
+          partCode: item.code,
+          quantity: item.quantity,
+          firstScannedAt: item.firstScannedAt,
+          lastScannedAt: item.lastScannedAt
+        }))
+      };
+    }
+
+    async function submitOrder() {
+      if (!state.items.size) return;
+
+      if (!state.settings.warehouseId || !state.settings.endpoint) {
+        openSettings();
+        showToast("Add the warehouse ID and spreadsheet URL first.", "error", 2800);
+        return;
+      }
+
+      const payload = createOrderPayload();
+      elements.submitButton.disabled = true;
+      elements.submitButton.textContent = "Sending…";
+
+      try {
+        if (!navigator.onLine) throw new Error("This phone is offline.");
+
+        localStorage.setItem(STORAGE_KEYS.lastSubmitted, JSON.stringify(payload));
+
+        await fetch(state.settings.endpoint, {
+          method: "POST",
+          mode: "no-cors",
+          cache: "no-store",
+          keepalive: true,
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+
+        state.items.clear();
+        saveOrder();
+        render();
+        showToast(`Order ${payload.orderId} sent`, "success", 3200);
+      } catch (error) {
+        console.error(error);
+        showToast(`Not sent: ${error.message || "connection error"}. Export CSV to preserve the order.`, "error", 4800);
+        render();
+      }
+    }
+
+    function csvEscape(value) {
+      const text = String(value ?? "");
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function exportCsv() {
+      if (!state.items.size) return;
+      const payload = createOrderPayload();
+      const headings = ["Order ID", "Submitted At", "Warehouse ID", "Worker", "Part Code", "Quantity", "First Scanned", "Last Scanned"];
+      const rows = payload.items.map(item => [
+        payload.orderId,
+        payload.submittedAt,
+        payload.warehouseId,
+        payload.worker,
+        item.partCode,
+        item.quantity,
+        item.firstScannedAt,
+        item.lastScannedAt
+      ]);
+
+      const csv = "\uFEFF" + [headings, ...rows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${payload.orderId}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast("CSV exported for Excel", "success", 1800);
+    }
+
+    function showToast(message, kind = "", duration = 1800) {
+      clearTimeout(showToast.timer);
+      elements.toast.textContent = message;
+      elements.toast.className = `toast show ${kind}`.trim();
+      showToast.timer = setTimeout(() => {
+        elements.toast.className = "toast";
+      }, duration);
+    }
+
+    function openSettings() {
+      elements.warehouseInput.value = state.settings.warehouseId;
+      elements.workerInput.value = state.settings.worker;
+      elements.endpointInput.value = state.settings.endpoint;
+      elements.accessKeyInput.value = state.settings.accessKey;
+      elements.settingsDialog.showModal();
+    }
+
+    elements.startButton.addEventListener("click", startScanner);
+    elements.stopButton.addEventListener("click", stopScanner);
+    elements.settingsButton.addEventListener("click", openSettings);
+    elements.cancelSettingsButton.addEventListener("click", () => elements.settingsDialog.close());
+
+    elements.manualForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      addPart(elements.manualCode.value, "manual");
+      elements.manualCode.value = "";
+      elements.manualCode.focus();
+    });
+
+    elements.clearButton.addEventListener("click", () => {
+      if (!state.items.size) return;
+      if (!confirm("Clear every scanned part from this order?")) return;
+      state.items.clear();
+      saveOrder();
+      render();
+    });
+
+    elements.exportButton.addEventListener("click", exportCsv);
+    elements.submitButton.addEventListener("click", submitOrder);
+
+    elements.settingsForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      state.settings = {
+        warehouseId: elements.warehouseInput.value.trim(),
+        worker: elements.workerInput.value.trim(),
+        endpoint: elements.endpointInput.value.trim(),
+        accessKey: elements.accessKeyInput.value
+      };
+      saveSettings();
+      render();
+      elements.settingsDialog.close();
+      showToast("Settings saved", "success");
+    });
+
+    window.addEventListener("pagehide", () => {
+      if (state.scanning && state.scanner) state.scanner.stop().catch(() => {});
+    });
+
+    loadState();
+    render();
+    if (!state.settings.warehouseId) openSettings();
+  </script>
+</body>
+</html>
